@@ -39,4 +39,13 @@ public class QueueForLab {
     public void deleteStudentFromQueue(Student student) {
         listOfStudent.remove(student);
     }
+
+    public String getListAsList(){
+        int index = 1;
+        String list = "\n";
+        for(Student student : listOfStudent){
+            list += index + ". " + student.getName() + ";\n";
+        }
+        return list;
+    }
 }
