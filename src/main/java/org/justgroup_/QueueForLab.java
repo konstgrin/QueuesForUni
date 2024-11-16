@@ -8,11 +8,13 @@ public class QueueForLab {
     private Time timeOfQueueCreation;
     private Time timeOfClass;
     private ArrayList<Student> listOfStudent;
+    private long idInQueue;
 
-    public QueueForLab(String className, Time timeOfQueueCreation, Time timeOfClass) {
+    public QueueForLab(String className, Time timeOfQueueCreation, Time timeOfClass, long idInQueue) {
         this.className = className;
         this.timeOfQueueCreation = timeOfQueueCreation;
         this.timeOfClass = timeOfClass;
+        this.idInQueue = idInQueue;
         listOfStudent = new ArrayList<>();
     }
 
@@ -27,6 +29,9 @@ public class QueueForLab {
     }
     public String getTimeOfClass() {
         return timeOfClass.toString();
+    }
+    public long getIdInQueue() {
+        return idInQueue;
     }
     public ArrayList<Student> getListOfStudent() {
         return listOfStudent;

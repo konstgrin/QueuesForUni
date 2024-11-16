@@ -3,3 +3,5 @@ errrrrrrrrrrrrrrrrrrrrrrrrr
 -Creating queues
 -Deleting queues
 -Getting list of queues and it's full info +
+
+-make setters in queues constructor
