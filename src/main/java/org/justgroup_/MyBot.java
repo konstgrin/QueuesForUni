@@ -1,5 +1,6 @@
 package org.justgroup_;
 
+import org.springframework.cache.annotation.CacheAnnotationParser;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
@@ -34,6 +35,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
     private final TelegramClient telegramClient;
     ArrayList<Long> admins = new ArrayList<>(Arrays.asList(1219763978L, 5115035519L));
     private int indexOfQueue = 0;
+    private boolean ableToDelete = true;
 
     private ArrayList<QueueForLab> queues = new ArrayList<>(
             Arrays.asList(
@@ -141,12 +143,13 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                 .messageId(messageId)      // ID of the message to delete
                 .build();
 
-        try{
-            telegramClient.execute(deleteMessage);
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
+        if(ableToDelete) {
+            try {
+                telegramClient.execute(deleteMessage);
+            } catch (TelegramApiException e) {
+                throw new RuntimeException(e);
+            }
         }
-
         switch (command){
             case "/start": startCommand(chatId); break;
             case "/listOfQueues": printListOfQueue(chatId); break;
@@ -199,11 +202,6 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
 
     public void inlineButtonsHandler(CallbackQuery call) {
         System.out.println("I GOT FCKING QUERRY " + call.getMessage().getChatId() + " " + call.getMessage().getMessageId());
-        System.out.println(usersAndId.keySet());
-        System.out.println(usersAndId.values());
-        for(QueueForLab queue: queues){
-            System.out.println(queue.getListOfStudent());
-        }
         String call_data = call.getData();
         int messageId = call.getMessage().getMessageId();
         long chat_id = call.getMessage().getChatId();
@@ -253,6 +251,13 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
         } catch (Exception e) {
             handleNoMessageError(chat_id);
         }
+    }
+
+    private void addQueue(CallbackQuery callbackQuery) {
+        ableToDelete = false;
+        long chat_id = callbackQuery.getMessage().getChatId();
+
+        ableToDelete = true;
     }
 
     private void changeRowsToBasic(CallbackQuery callbackQuery) {

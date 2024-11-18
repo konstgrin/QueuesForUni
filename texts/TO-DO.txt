@@ -3,5 +3,6 @@ errrrrrrrrrrrrrrrrrrrrrrrrr
 -Creating queues
 -Deleting queues
 -Getting list of queues and it's full info +
+-ADDING QUEUES ON GOD DUDE MAKE THIS SHIT ALREADY
 
--make setters in queues constructor
+-make setters in queues constructor )))))))))))))00
