@@ -17,6 +17,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
 import java.io.File;
@@ -35,7 +36,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
     private final TelegramClient telegramClient;
     ArrayList<Long> admins = new ArrayList<>(Arrays.asList(1219763978L, 5115035519L));
     private int indexOfQueue = 0;
-    private boolean ableToDelete = true;
+    private boolean getAdminShit = false;
 
     private ArrayList<QueueForLab> queues = new ArrayList<>(
             Arrays.asList(
@@ -45,7 +46,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
             )
     );
     private HashMap<Long, Integer> usersAndId = new HashMap(); //first - idOfChat; second - idOfMessage
-
+    private long idForLab = 0;
     private ArrayList<InlineKeyboardRow> basicRows = new ArrayList<>(
             Arrays.asList(
                     new InlineKeyboardRow(
@@ -102,12 +103,6 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                                     .callbackData("add_queue")
                                     .build(),
                             InlineKeyboardButton.builder()
-                                    .text("Change queue")
-                                    .callbackData("change_queue")
-                                    .build()
-                    ),
-                    new InlineKeyboardRow(
-                            InlineKeyboardButton.builder()
                                     .text("Delete Queue")
                                     .callbackData("delete_queue")
                                     .build()
@@ -137,22 +132,54 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
     }
 
     public void commandsHandler(String command, long chatId, int messageId) {
+        if (getAdminShit) {
+            SendMessage popup = SendMessage.builder()
+                    .text("Wrong format of someting or everything)))")
+                    .chatId(chatId)
+                    .build();
+
+            String[] parts = command.split("\n");
+            if(parts.length == 4) {
+                try{
+                    queues.add(new QueueForLab(parts[0], Time.valueOf(parts[1]), DayOfWeek.valueOf(parts[2].toUpperCase()), Time.valueOf(parts[3]), idForLab++));
+                } catch (Exception e){
+                    try {
+                        telegramClient.execute(popup);
+                    } catch (TelegramApiException e1) {
+                        e1.printStackTrace();
+                    }
+                }
+                System.out.println(queues.getLast());
+            } else {
+                try {
+                    telegramClient.execute(popup);
+                } catch (TelegramApiException e) {
+                    System.out.println("Something went wrong");
+                    e.printStackTrace();
+                }
+            }
+            getAdminShit = false;
+            adminInlineKeybord(chatId, usersAndId.get(chatId));
+        }
+
         DeleteMessage deleteMessage = DeleteMessage
                 .builder()
                 .chatId(chatId) // Chat ID as String
                 .messageId(messageId)      // ID of the message to delete
                 .build();
 
-        if(ableToDelete) {
-            try {
-                telegramClient.execute(deleteMessage);
-            } catch (TelegramApiException e) {
-                throw new RuntimeException(e);
-            }
+        try {
+            telegramClient.execute(deleteMessage);
+        } catch (TelegramApiException e) {
+            throw new RuntimeException(e);
         }
-        switch (command){
-            case "/start": startCommand(chatId); break;
-            case "/listOfQueues": printListOfQueue(chatId); break;
+        switch (command) {
+            case "/start":
+                startCommand(chatId);
+                break;
+            case "/listOfQueues":
+                printListOfQueue(chatId);
+                break;
         }
     }
 
@@ -205,6 +232,20 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
         String call_data = call.getData();
         int messageId = call.getMessage().getMessageId();
         long chat_id = call.getMessage().getChatId();
+        EditMessageText editMessageText;
+        if(usersAndId.get(chat_id) == null) {
+            handleNoMessageError(chat_id);
+            DeleteMessage deleteOldMessage = DeleteMessage.builder()
+                    .messageId(messageId)
+                    .chatId(chat_id)
+                    .build();
+            try {
+                telegramClient.execute(deleteOldMessage);
+            } catch (TelegramApiException e) {
+                System.out.println("Something went wrong");
+            }
+        }
+
         try {
             switch (call_data) {
                 case "show_queues":
@@ -247,27 +288,112 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                     indexOfQueue--;
                     printListOfQueue(chat_id);
                     break;
+                case "add_queue":
+                    addQueue(call);
+                    break;
+                case "delete_queue":
+                    fillInlineKeyboardWithQueues();
+                    idForLab = 0;
+                    editMessageText = EditMessageText.builder()
+                            .text("Choose queue to delete")
+                            .replyMarkup(InlineKeyboardMarkup.builder()
+                                    .keyboard(listOfQueuesRows)
+                                    .build()
+                            )
+                            .chatId(chat_id)
+                            .messageId(messageId)
+                            .build();
+
+                    try {
+                        telegramClient.execute(editMessageText);
+                    } catch (TelegramApiException e) {
+                        System.out.println("Something went wrong");
+                    }
+                    break;
+                default:
+                    deleteQueue(call);
+                    fillInlineKeyboardWithQueues();
+                    editMessageText = EditMessageText.builder()
+                            .text("Choose queue to delete")
+                            .replyMarkup(InlineKeyboardMarkup.builder()
+                                    .keyboard(listOfQueuesRows)
+                                    .build()
+                            )
+                            .chatId(chat_id)
+                            .messageId(messageId)
+                            .build();
+
+                    try {
+                        telegramClient.execute(editMessageText);
+                    } catch (TelegramApiException e) {
+                        System.out.println("Something went wrong");
+                    }
+                    break;
             }
         } catch (Exception e) {
             handleNoMessageError(chat_id);
         }
     }
 
-    private void addQueue(CallbackQuery callbackQuery) {
-        ableToDelete = false;
-        long chat_id = callbackQuery.getMessage().getChatId();
+    private void deleteQueue(CallbackQuery callbackQuery) {
+        for(int i = 0; i < queues.size(); i++) {
+            if(queues.get(i).getIdInQueue() == (Long.parseLong(callbackQuery.getData()))) {
+                queues.remove(i);
+                break;
+            }
+        }
+    }
 
-        ableToDelete = true;
+    private void addQueue(CallbackQuery callbackQuery) {
+        getAdminShit = true;
+        long chat_id = callbackQuery.getMessage().getChatId();
+        int messageId = callbackQuery.getMessage().getMessageId();
+
+        EditMessageText editMessageText = EditMessageText.builder()
+                .text("Format of new Queue: \nName of class\nTime for queue to get cleared\nDay Of week\nTime of class start")
+                .chatId(chat_id)
+                .messageId(messageId)
+                .replyMarkup(InlineKeyboardMarkup
+                        .builder()
+                        .keyboardRow(
+                                new InlineKeyboardRow(
+                                InlineKeyboardButton.builder()
+                                        .text("Back")
+                                        .callbackData("admin_panel")
+                                        .build()
+                        ))
+                        .build()
+                )
+                .build();
+
+        try {
+            telegramClient.execute(editMessageText);
+        } catch (TelegramApiException e) {
+            System.out.println("Something went wrong");
+        }
     }
 
     private void changeRowsToBasic(CallbackQuery callbackQuery) {
         long chat_id = callbackQuery.getMessage().getChatId();
         int messageId = callbackQuery.getMessage().getMessageId();
+        StringBuilder stringBuilder = new StringBuilder("I'm very pleased you use my shit :>\n/////////////////////////////\n\nYour positions in queues:\n");
+
+        int index = 1;
+        for(QueueForLab queue: queues) {
+            System.out.println("shit");
+            for(int i = 0; i < queue.getListOfStudent().size(); i++) {
+                Student student = queue.getListOfStudent().get(i);
+                if(student.getTelegramID() == chat_id) {
+                    System.out.println("shit found");
+                    stringBuilder.append((index++) + ". " + student.getName() + " | Your position - " + (i + 1) + "\n");
+                }
+            }
+        }
 
         EditMessageText editMessageText = EditMessageText.builder()
                 .chatId(chat_id)
                 .messageId(messageId)
-                .text("I'm very pleased you use this shit :>")
+                .text(stringBuilder.toString())
                 .replyMarkup(
                         InlineKeyboardMarkup.builder()
                                 .keyboard(basicRows)
@@ -319,6 +445,38 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
     }
 
     private void printListOfQueue(long chatId){
+        Integer messageId;
+        messageId = usersAndId.get(chatId);
+
+        EditMessageText editMessageText;
+        if(queues.isEmpty()) {
+            System.out.println("shit");
+            editMessageText = EditMessageText.builder()
+                    .chatId(chatId)
+                    .messageId(messageId)
+                    .text("Nothing here...")
+                    .replyMarkup(InlineKeyboardMarkup
+                            .builder()
+                            .keyboardRow(
+                                    new InlineKeyboardRow(
+                                            InlineKeyboardButton.builder()
+                                                    .text("Back")
+                                                    .callbackData("back_to_basic")
+                                                    .build()
+                                    )
+                            )
+                            .build()
+                    )
+                    .build();
+
+            try {
+                telegramClient.execute(editMessageText);
+            } catch (TelegramApiException e) {
+                System.out.println("Something went wrong");
+            }
+            return;
+        }
+
         if(indexOfQueue < 0){
             indexOfQueue = queues.size() - 1;
         }
@@ -329,17 +487,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
         StringBuilder textMessage = new StringBuilder();
         textMessage.append(queues.get(indexOfQueue).getClassName() + "\nClass start time: " + queues.get(indexOfQueue).getTimeOfClass().toString() + " | " + queues.get(indexOfQueue).getDayOfWeek().toString() + "\nQueue:" + queues.get(indexOfQueue).getListAsList());
 
-        Integer messageId;
-        if(usersAndId.get(chatId) != null){
-            messageId = usersAndId.get(chatId);
-        }
-        else{
-            handleNoMessageError(chatId);
-            System.out.println("Something went wrong");
-            messageId = usersAndId.get(chatId);
-        }
-
-        EditMessageText editMessageText = EditMessageText.builder()
+        editMessageText = EditMessageText.builder()
                 .chatId(chatId)
                 .messageId(messageId)
                 .text(textMessage.toString())
@@ -358,7 +506,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
 
     private void adminInlineKeybord(long chatId, int messageId){
         EditMessageText editMessageText = EditMessageText.builder()
-                .text("yo")
+                .text("Hoho, welcome :3")
                 .chatId(chatId)
                 .messageId(messageId)
                 .replyMarkup(InlineKeyboardMarkup
@@ -367,7 +515,7 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                         .build()
                 )
                 .build();
-
+        getAdminShit = false;
         try {
             telegramClient.execute(editMessageText);
         } catch (TelegramApiException e) {
@@ -405,5 +553,11 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                             .build()
             ));
         }
+        listOfQueuesRows.add(new InlineKeyboardRow(
+                InlineKeyboardButton.builder()
+                        .text("Back")
+                        .callbackData("admin_panel")
+                        .build())
+        );
     }
 }
