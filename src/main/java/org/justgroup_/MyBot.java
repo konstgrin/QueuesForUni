@@ -25,9 +25,12 @@ import java.nio.file.Paths;
 import java.sql.Array;
 import java.sql.Time;
 import java.time.DayOfWeek;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
+import java.util.*;
+import java.util.concurrent.*;
 
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -117,6 +120,8 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
     );
 
     private ArrayList<InlineKeyboardRow> listOfQueuesRows = new ArrayList<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+    private final Map<QueueForLab, ScheduledFuture<?>> activeQueues = new ConcurrentHashMap<>();
 
     public MyBot(String botToken) {
         telegramClient = new OkHttpTelegramClient(botToken);
@@ -141,7 +146,9 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
             String[] parts = command.split("\n");
             if(parts.length == 4) {
                 try{
-                    queues.add(new QueueForLab(parts[0], Time.valueOf(parts[1]), DayOfWeek.valueOf(parts[2].toUpperCase()), Time.valueOf(parts[3]), idForLab++));
+                    QueueForLab queue = new QueueForLab(parts[0], Time.valueOf(parts[1]), DayOfWeek.valueOf(parts[2].toUpperCase()), Time.valueOf(parts[3]), idForLab++);
+                    queues.add(queue);
+                    scheduleWeeklyQueueClearing(queue);
                 } catch (Exception e){
                     try {
                         telegramClient.execute(popup);
@@ -149,7 +156,6 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                         e1.printStackTrace();
                     }
                 }
-                System.out.println(queues.getLast());
             } else {
                 try {
                     telegramClient.execute(popup);
@@ -559,5 +565,44 @@ public class MyBot implements LongPollingSingleThreadUpdateConsumer {
                         .callbackData("admin_panel")
                         .build())
         );
+    }
+
+    private void scheduleWeeklyQueueClearing(QueueForLab queue) {
+        // Calculate initial delay until the next occurrence of the specified time
+        long initialDelay = calculateInitialDelay(queue.getTimeOfQueueCreation(), queue.getDayOfWeek());
+
+        // Calculate one week in milliseconds
+        long oneWeek = TimeUnit.DAYS.toMillis(7);
+
+        // Schedule the task to run every week
+        ScheduledFuture<?> scheduledTask = scheduler.scheduleAtFixedRate(() -> {
+            System.out.println("Clearing list of students for queue: " + queue.getClassName());
+            clearListOfStudents(queue);
+        }, initialDelay, oneWeek, TimeUnit.MILLISECONDS);
+
+        // Store the scheduled task for potential future cancellation
+        activeQueues.put(queue, scheduledTask);
+    }
+
+    // Calculate delay in milliseconds
+    private long calculateInitialDelay(Time timeOfQueueCreation, DayOfWeek dayOfWeek) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime nextRun = now.with(TemporalAdjusters.nextOrSame(dayOfWeek))
+                .withHour(timeOfQueueCreation.getHours())
+                .withMinute(timeOfQueueCreation.getMinutes())
+                .withSecond(0)
+                .withNano(0);
+
+        if (nextRun.isBefore(now)) {
+            nextRun = nextRun.plusWeeks(1); // Move to the next week if time has already passed
+        }
+
+        return Duration.between(now, nextRun).toMillis();
+    }
+
+    // Clear the queue and remove it from the active list
+    private void clearListOfStudents(QueueForLab queue) {
+        queue.setListOfStudent(new ArrayList<>()); // Clear the list
+       // Optional: Notify users or update the state
     }
 }

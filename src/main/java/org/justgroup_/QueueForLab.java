@@ -27,8 +27,8 @@ public class QueueForLab {
     public void setClassName(String className) {
         this.className = className;
     }
-    public String getTimeOfQueueCreation() {
-        return timeOfQueueCreation.toString();
+    public Time getTimeOfQueueCreation() {
+        return timeOfQueueCreation;
     }
     public DayOfWeek getDayOfWeek() { return dayOfWeek; }
     public Time getTimeOfClass() {
@@ -56,5 +56,9 @@ public class QueueForLab {
             list += index++ + ". @" + student.getName() + ";\n";
         }
         return list;
+    }
+
+    public void setListOfStudent(ArrayList<Student> listOfStudent) {
+        this.listOfStudent = listOfStudent;
     }
 }
