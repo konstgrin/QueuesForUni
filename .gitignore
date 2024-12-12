@@ -37,7 +37,7 @@ build/
 ### Mac OS ###
 .DS_Store
 
-config.properties
+#config.properties
 file
 file.pub
 key
